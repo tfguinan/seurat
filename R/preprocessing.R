@@ -3087,6 +3087,104 @@ ReadVizgen <- function(
   return(outs)
 }
 
+#' Read CellBender hdf5 file
+#'
+#' Read count matrix from CellBender hdf5 file.
+#' Modified from Seurat's Read10X_h5 function - mileage may vary.
+#'
+#' @param filename Path to h5 file
+#' @param use.names Label row names with feature names rather than ID numbers.
+#' @param unique.features Make feature names unique (default TRUE)
+#' @param genome.name Name of genome to read. If NULL, reads all genomes.
+#'
+#' @return Returns a sparse matrix with rows and columns labeled. If multiple
+#' genomes are present, returns a list of sparse matrices (one per genome).
+#'
+#' @export
+#' @concept preprocessing
+#'
+ReadCB_h5 <- function(filename, use.names = TRUE, unique.features = TRUE, genome.name = NULL) {
+  if (!requireNamespace('hdf5r', quietly = TRUE)) {
+    stop("Please install hdf5r to read HDF5 files")
+  }
+  if (!file.exists(filename)) {
+    stop("File not found")
+  }
+  infile <- hdf5r::H5File$new(filename = filename, mode = 'r')
+
+
+  output <- list()
+  if (hdf5r::existsGroup(infile, 'matrix')) {
+    # cellranger version 3
+    if (use.names) {
+      feature_slot <- 'features/name'
+    } else {
+      feature_slot <- 'features/id'
+    }
+  } else {
+    if (use.names) {
+      feature_slot <- 'gene_names'
+    } else {
+      feature_slot <- 'genes'
+    }
+  }
+
+  if (is.null(genome.name)) {
+    genomes <- names(x = infile)
+  } else {
+    genomes <- genome.name
+  }
+
+  for (genome in genomes) {
+    counts <- infile[[paste0(genome, '/data')]]
+    indices <- infile[[paste0(genome, '/indices')]]
+    indptr <- infile[[paste0(genome, '/indptr')]]
+    shp <- infile[[paste0(genome, '/shape')]]
+    features <- infile[[paste0(genome, '/', feature_slot)]][]
+    barcodes <- infile[[paste0(genome, '/barcodes')]]
+    sparse.mat <- sparseMatrix(
+      i = indices[] + 1,
+      p = indptr[],
+      x = as.numeric(x = counts[]),
+      dims = shp[],
+      repr = "T"
+    )
+    if (unique.features) {
+      features <- make.unique(names = features)
+    }
+    rownames(x = sparse.mat) <- features
+    colnames(x = sparse.mat) <- barcodes[]
+    sparse.mat <- as.sparse(x = sparse.mat)
+    # Split v3 multimodal
+    if (hdf5r::existsGroup(infile, paste0(genome, '/features'))) {
+      types <- infile[[paste0(genome, '/features/feature_type')]][]
+      types.unique <- unique(x = types)
+      if (length(x = types.unique) > 1) {
+        message(
+          "Genome ",
+          genome,
+          " has multiple modalities, returning a list of matrices for this genome"
+        )
+        sparse.mat <- sapply(
+          X = types.unique,
+          FUN = function(x) {
+            return(sparse.mat[which(x = types == x), ])
+          },
+          simplify = FALSE,
+          USE.NAMES = TRUE
+        )
+      }
+    }
+    output[[genome]] <- sparse.mat
+  }
+  infile$close_all()
+  if (length(x = output) == 1) {
+    return(output[[genome]])
+  } else{
+    return(output)
+  }
+}
+
 #' Normalize raw data to fractions
 #'
 #' Normalize count data to relative counts per cell by dividing by the total
