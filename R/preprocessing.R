@@ -3095,7 +3095,7 @@ ReadVizgen <- function(
 #' @param filename Path to h5 file
 #' @param use.names Label row names with feature names rather than ID numbers.
 #' @param unique.features Make feature names unique (default TRUE)
-#' @param genome.name Name of genome to read. If NULL, reads all genomes.
+#' @param genome.name Name of genome to read. If NULL, reads all genomes. Default is 'matrix' to match CellBender format.
 #'
 #' @return Returns a sparse matrix with rows and columns labeled. If multiple
 #' genomes are present, returns a list of sparse matrices (one per genome).
@@ -3103,7 +3103,7 @@ ReadVizgen <- function(
 #' @export
 #' @concept preprocessing
 #'
-ReadCB_h5 <- function(filename, use.names = TRUE, unique.features = TRUE, genome.name = NULL) {
+ReadCB_h5 <- function(filename, use.names = TRUE, unique.features = TRUE, genome.name = 'matrix') {
   if (!requireNamespace('hdf5r', quietly = TRUE)) {
     stop("Please install hdf5r to read HDF5 files")
   }
